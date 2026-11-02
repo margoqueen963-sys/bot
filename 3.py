@@ -3,6 +3,8 @@ import json
 import os
 import logging
 
+from dotenv import load_dotenv
+
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -13,12 +15,23 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = os.environ.get('TOKEN')
+# Загружаем токен из файла .env
+load_dotenv("/home/TIshka/bot/.env")
+TOKEN = os.getenv("TOKEN")
+
+if not TOKEN:
+    raise ValueError("Токен не найден! Проверь файл .env")
+
 DATA_FILE = "user.json"
 
 # Этапы заполнения профиля
 NAME, AGE, COLOR, CITY, COUNTRY = range(5)
 
+# Настройка журнала ошибок
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 # Загружаем сохранённые профили
 def load_users():
@@ -32,7 +45,7 @@ def load_users():
         return {}
 
 
-# Записываем профили в файл
+# Сохраняем профили
 def save_users(users):
     with open(DATA_FILE, "w", encoding="utf-8") as file:
         json.dump(users, file, ensure_ascii=False, indent=4)
@@ -57,7 +70,7 @@ async def setprofile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NAME
 
 
-# Проверяем текстовый ответ
+# Проверка текста
 def valid_text(text):
     return bool(text.strip()) and len(text.strip()) <= 100
 
@@ -82,8 +95,10 @@ async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         age = int(update.message.text.strip())
+
         if not 1 <= age <= 120:
             raise ValueError
+
     except ValueError:
         await update.message.reply_text(
             "Введи возраст целым числом от 1 до 120."
@@ -101,7 +116,9 @@ async def get_color(update: Update, context: ContextTypes.DEFAULT_TYPE):
     color = update.message.text.strip()
 
     if not valid_text(color):
-        await update.message.reply_text("Введи корректное название цвета.")
+        await update.message.reply_text(
+            "Введи корректное название цвета."
+        )
         return COLOR
 
     context.user_data["color"] = color
@@ -124,7 +141,7 @@ async def get_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return COUNTRY
 
 
-# Получаем страну и сохраняем весь профиль
+# Получаем страну и сохраняем профиль
 async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     country = update.message.text.strip()
 
@@ -142,7 +159,6 @@ async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "country": country,
     }
 
-    # Сохраняем изменения сразу в JSON
     save_users(users)
 
     await update.message.reply_text(
@@ -192,29 +208,45 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# Отмена заполнения профиля
+# Отмена заполнения
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text("Заполнение профиля отменено.")
+
+    await update.message.reply_text(
+        "Заполнение профиля отменено."
+    )
+
     return ConversationHandler.END
 
 
-# Запуск программы
+# Запуск бота
 def main():
     app = Application.builder().token(TOKEN).build()
 
     conversation = ConversationHandler(
-        entry_points=[CommandHandler("setprofile", setprofile)],
+        entry_points=[
+            CommandHandler("setprofile", setprofile)
+        ],
         states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_age)],
-            COLOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_color)],
-            CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_city)],
+            NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)
+            ],
+            AGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_age)
+            ],
+            COLOR: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_color)
+            ],
+            CITY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_city)
+            ],
             COUNTRY: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, get_country)
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel)
+        ],
     )
 
     app.add_handler(CommandHandler("start", start))
@@ -223,6 +255,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
 
     print("Бот запущен!")
+
     app.run_polling()
 
 
